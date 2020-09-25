@@ -1,0 +1,13 @@
+version: '3.7'
+services:
+    recomlive:
+        env_file: .env
+        image: pytorch/pytorch:latest
+        container_name: recomlive
+        volumes:
+            - ./:/recomlive
+        ports:
+            - ${RECOMMENDER_PORT}:${RECOMMENDER_PORT}/udp
+        restart: unless-stopped
+        working_dir: /recomlive
+        command: ./main.py startindocker
