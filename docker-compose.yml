@@ -11,3 +11,30 @@ services:
         restart: unless-stopped
         working_dir: /recomlive
         command: ./main.py startindocker
+
+    graphite:
+        build:
+            context: ./graphite/docker-go-graphite/
+            dockerfile: Dockerfile
+        ports:
+            - ${GRAFANA_PORT}:80
+        volumes:
+            - grafana_data:/usr/share/grafana/data
+            - graphite_data:/var/lib/graphite
+            - graphite_logs:/var/log
+            - ./graphite/storage-schemas.conf:/etc/go-carbon/storage-schemas.conf:ro
+            - ./graphite/go-carbon.conf:/etc/go-carbon/go-carbon.conf:ro
+  
+    carbon:
+        image: grafana/carbon-relay-ng
+        depends_on:
+            - graphite
+        volumes:
+            - ./graphite/carbon-relay-ng.ini:/conf/carbon-relay-ng.ini
+
+
+volumes:
+  grafana_data:
+  graphite_data:
+  graphite_logs:
+
