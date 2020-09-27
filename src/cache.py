@@ -1,11 +1,30 @@
 from collections import OrderedDict, namedtuple
 from copy import copy
 
+"""Adaptive replacement cache implementation based upon OrderedDict
+    see https://en.wikipedia.org/wiki/Adaptive_replacement_cache
+
+Every cached element is represented as a list (mutable tuple) of three elements:
+    IDX (int): 0th, index of an element, integer value from 0 to cache.size - 1
+    KEY (str): 1st, arbitrary unique identifier of an element
+    VAL (any): 2nd, arbitrary value that's being cached
+"""
 IDX = 0
 KEY = 1
 VAL = 2
 
+"""A return value of get_by_key(), get_by_idx(), get_replace():
+
+    Attributes:
+        is_hit (bool): whether or not an element, identified by key or idx,
+            existed in the cache at the moment of a lookup
+        idx (int): index of an element in cache
+        key (str): unique identifier of an element
+        value (any): cached value
+"""
 Result = namedtuple('Result', 'is_hit, idx, key, value')
+
+
 class Cache(object):
     def __init__(self, size):
         self.size = size
