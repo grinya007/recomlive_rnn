@@ -56,6 +56,7 @@ class Recommender():
 
     def person_history(self, person_id):
         """Looks up browsing history given a person_id
+
             Returns a list of zero or more document_id-s
         """
         prs_res = self.persons_cache.get_by_key(person_id)
@@ -103,23 +104,37 @@ class Recommender():
             # Yay, a person "clicked" the previous recommendation!
             self.graphite.send('recomlive.recommendation_hit.sum', 1)
 
+        # Let's add the current document_id into a person's history
+        # and see if there is something to learn on
         prs_res.value.append_history(document_id)
         unlearned = prs_res.value.unlearned_docs()
-        if len(unlearned) == 2:
+        if len(unlearned) >= 2:
+            # right, we have at least 2 unlearned documents
+            # but we need to check if these are still in the cache
             inputs = []
             for document_id in reversed(unlearned):
+                # btw, document_id-s are stored in history in reversed order
                 doc_res = self.documents_cache.get_by_key(document_id)
                 if doc_res is not None:
                     inputs.append(doc_res.idx)
             if len(inputs) >= 2:
+                # ok, so now we're sure that we have the sequence of at least 2
+                # documents that we can learn on
                 self.graphite.send('recomlive.rnn_learn.sum', 1)
+
+                # documents are fed into RNN as a list of their indexes
                 loss = self.rnn.fit(inputs)
                 self.graphite.send('recomlive.rnn_loss.avg', loss)
+
+                # all but the current document_id is marked as learned
                 prs_res.value.mark_learned(unlearned)
 
 
     def recommend(self, document_id, person_id = None):
-        """Looks up browsing history given a person_id
+        """Makes item-based recommendations given a document_id
+            if a person_id is provided then recommendations are filtered
+            so that they don't include documents seen by a person
+
             Returns a list of zero or more document_id-s
         """
 
@@ -127,6 +142,7 @@ class Recommender():
 
         doc_res = self.documents_cache.get_by_key(document_id)
         if doc_res is None:
+            # Can't recommend anything for an unknown document
             self.graphite.send('recomlive.no_recommendations.sum', 1)
             return []
 
@@ -137,18 +153,23 @@ class Recommender():
             if prs_res is not None:
                 history = prs_res.value.history
 
+        # let's pass the RNN forward
         r = self.rnn.predict(doc_res.idx)
 
         recs = []
         for i in r:
             if i == doc_res.idx:
+                # make sure we don't recommend a document for itself
                 continue
 
             rec_res = self.documents_cache.get_by_idx(i)
             if rec_res is None:
+                # or a document that has been removed from cache
+                # because we can't resolve its idx to id anymore
                 continue
 
             if rec_res.key in history:
+                # ar a document seen by a person
                 continue
 
             recs.append(rec_res.key)
@@ -159,15 +180,24 @@ class Recommender():
             self.graphite.send('recomlive.no_recommendations.sum', 1)
 
         if prs_res is not None:
+            # let's preserve the recommendations in the person object
+            # this is how we'll know if there was a "click" when
+            # we see this person next time
             prs_res.value.prev_recs = set(recs)
 
         return recs
 
 
 
-class Person(object):
+class Person():
+    """Person class implements the browsing history management
+        As well as keeps track of what document pairs have been passed through RNN
+    """
     def __init__(self, pid, history_max_length):
         self.id = pid
+
+        # In the history, key is a document_id and value is a Boolean value
+        # of whether or not this document_id has been fed into RNN as an input
         self.history = Deque()
         self.history_max_length = history_max_length
         self.prev_recs = set()
@@ -187,6 +217,8 @@ class Person(object):
         return doc_ids
 
     def mark_learned(self, doc_ids):
+        # Marking all but the latest document_id
+        # NOTE that document_id-s are stored in the reversed order
         for doc_id in doc_ids[1:]:
             if doc_id in self.history:
                 self.history.od[doc_id] = True
