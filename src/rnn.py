@@ -1,18 +1,24 @@
 import torch
 
 class RNN(torch.nn.Module):
+    """Recurrent Neural Network model based upon PyTorch Gated Recurrent Unit
 
-    def __init__(self, input_dim, embedding_dim, hidden_dim, device = 'cuda'):
+        Constructor arguments:
+            num_embeddings (int): size of the dictionary of embeddings
+            embedding_dim (int): the size of each embedding vector
+    """
+
+    def __init__(self, num_embeddings, embedding_dim, hidden_dim, device = 'cuda'):
         super(__class__, self).__init__()
 
-        self.input_dim  = input_dim
+        self.num_embeddings  = num_embeddings
         self.hidden_dim = hidden_dim
         self.device     = torch.device(device)
 
-        self.embed      = torch.nn.Embedding(input_dim, embedding_dim)
+        self.embed      = torch.nn.Embedding(num_embeddings, embedding_dim)
         self.rnn        = torch.nn.GRU(embedding_dim, hidden_dim)
         self.do         = torch.nn.Dropout(0.1)
-        self.linear     = torch.nn.Linear(hidden_dim, input_dim)
+        self.linear     = torch.nn.Linear(hidden_dim, num_embeddings)
         self.out        = torch.nn.LogSoftmax(dim = 1)
 
         self.loss       = torch.nn.CrossEntropyLoss()
@@ -51,6 +57,6 @@ class RNN(torch.nn.Module):
         with torch.no_grad():
             x = torch.tensor(x, dtype=torch.long, device=self.device).view(1, 1, -1)
             Y = self.forward(x)
-            _, prediction = Y.topk(self.input_dim)
+            _, prediction = Y.topk(self.num_embeddings)
             return prediction[0].tolist()
 

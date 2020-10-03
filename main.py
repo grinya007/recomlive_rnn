@@ -31,7 +31,7 @@ def dispatcher(server, data, response):
             pid (str): arbitrary person ID
         """
         method, did, pid = data.decode('ascii').split(',')
-        
+
         if method == 'RECR':
             """Records a visit: person pid visited document did
             """
